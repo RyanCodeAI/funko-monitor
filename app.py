@@ -9,6 +9,7 @@ import threading
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import sys   # ← NEW LINE
 
 URL = "https://shop.forbiddenplanet.co.uk/collections/funko"
 STORAGE_FILE = "seen_funko_products.json"
@@ -39,6 +40,7 @@ def get_current_product_urls():
         return {base + link.get("href").split("?")[0].split("#")[0] for link in links if link.get("href")}
     except Exception as e:
         print(f"[{datetime.now()}] Error: {e}")
+        sys.stdout.flush()
         return set()
 
 def send_email_notification(new_products):
@@ -46,6 +48,7 @@ def send_email_notification(new_products):
         print(f"\n🚨 {len(new_products)} NEW FUNKO(S) FOUND! (Email not configured)")
         for p in list(new_products)[:5]:
             print(f"→ {p}")
+        sys.stdout.flush()
         return
 
     try:
@@ -64,22 +67,27 @@ def send_email_notification(new_products):
         server.quit()
 
         print(f"[{datetime.now()}] ✅ Email sent to {EMAIL_ADDRESS}")
+        sys.stdout.flush()
     except Exception as e:
         print(f"[{datetime.now()}] Email failed: {e}")
+        sys.stdout.flush()
 
 def monitor_loop():
     print("🛍️ Funko Monitor STARTED 24/7 with EMAIL alerts!")
+    sys.stdout.flush()
     seen = load_seen_products()
     while True:
         current = get_current_product_urls()
         new = current - seen
         if new:
             print(f"[{datetime.now()}] 🎉 {len(new)} NEW PRODUCTS!")
+            sys.stdout.flush()
             send_email_notification(new)
             seen.update(new)
             save_seen_products(seen)
         else:
-            print(f"[{datetime.now()}] No new Funko")
+            print(f"[{datetime.now()}] ✅ No new Funko")
+            sys.stdout.flush()
         time.sleep(60)
 
 @app.route("/")
