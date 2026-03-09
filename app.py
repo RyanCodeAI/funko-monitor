@@ -6,13 +6,15 @@ import os
 from datetime import datetime
 from flask import Flask
 import threading
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 URL = "https://shop.forbiddenplanet.co.uk/collections/funko"
 STORAGE_FILE = "seen_funko_products.json"
 
-# Optional Telegram (leave empty for now — it will just print in logs)
-TELEGRAM_BOT_TOKEN = ""
-TELEGRAM_CHAT_ID = ""
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
+EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
 
 app = Flask(__name__)
 
@@ -39,23 +41,41 @@ def get_current_product_urls():
         print(f"[{datetime.now()}] Error: {e}")
         return set()
 
-def send_notification(new_products):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print(f"\n🚨 {len(new_products)} NEW FUNKO(S) FOUND!")
+def send_email_notification(new_products):
+    if not EMAIL_ADDRESS or not EMAIL_APP_PASSWORD:
+        print(f"\n🚨 {len(new_products)} NEW FUNKO(S) FOUND! (Email not configured)")
         for p in list(new_products)[:5]:
             print(f"→ {p}")
         return
-    # Telegram code (we add later if you want phone alerts)
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = EMAIL_ADDRESS
+        msg['Subject'] = f"🎉 {len(new_products)} NEW FUNKO(S) on Forbidden Planet!"
+
+        body = "New products just dropped!\n\n" + "\n".join(new_products)
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, msg.as_string())
+        server.quit()
+
+        print(f"[{datetime.now()}] ✅ Email sent to {EMAIL_ADDRESS}")
+    except Exception as e:
+        print(f"[{datetime.now()}] Email failed: {e}")
 
 def monitor_loop():
-    print("🛍️ Funko Monitor STARTED 24/7!")
+    print("🛍️ Funko Monitor STARTED 24/7 with EMAIL alerts!")
     seen = load_seen_products()
     while True:
         current = get_current_product_urls()
         new = current - seen
         if new:
             print(f"[{datetime.now()}] 🎉 {len(new)} NEW PRODUCTS!")
-            send_notification(new)
+            send_email_notification(new)
             seen.update(new)
             save_seen_products(seen)
         else:
@@ -64,7 +84,7 @@ def monitor_loop():
 
 @app.route("/")
 def home():
-    return "✅ Funko Monitor is running 24/7! (ping OK)"
+    return "✅ Funko Monitor is running 24/7 with EMAIL! (ping OK)"
 
 if __name__ == "__main__":
     thread = threading.Thread(target=monitor_loop, daemon=True)
