@@ -6,16 +6,14 @@ import os
 from datetime import datetime
 from flask import Flask
 import threading
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import sys   # ← NEW LINE
+import sys
 
 URL = "https://shop.forbiddenplanet.co.uk/collections/funko"
 STORAGE_FILE = "seen_funko_products.json"
 
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
-EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
+# ←←← YOUR TELEGRAM DETAILS ←←←
+TELEGRAM_BOT_TOKEN = "8617739074:AAHhHJdGaN11XQB24nOs7jJ4XDdxghvQrvI"      # ← paste your token here
+TELEGRAM_CHAT_ID = "1232067059"        # ← paste your chat ID here
 
 app = Flask(__name__)
 
@@ -43,37 +41,30 @@ def get_current_product_urls():
         sys.stdout.flush()
         return set()
 
-def send_email_notification(new_products):
-    if not EMAIL_ADDRESS or not EMAIL_APP_PASSWORD:
-        print(f"\n🚨 {len(new_products)} NEW FUNKO(S) FOUND! (Email not configured)")
+def send_telegram_notification(new_products):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print(f"\n🚨 {len(new_products)} NEW FUNKO(S) FOUND! (Telegram not set up)")
         for p in list(new_products)[:5]:
             print(f"→ {p}")
         sys.stdout.flush()
         return
 
+    message = f"🚨 <b>{len(new_products)} NEW FUNKO(S)</b> on Forbidden Planet International!\n\n"
+    message += "\n".join([f"• {p}" for p in list(new_products)[:10]])
+
     try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_ADDRESS
-        msg['To'] = EMAIL_ADDRESS
-        msg['Subject'] = f"🎉 {len(new_products)} NEW FUNKO(S) on Forbidden Planet!"
-
-        body = "New products just dropped!\n\n" + "\n".join(new_products)
-        msg.attach(MIMEText(body, 'plain'))
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
-        server.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, msg.as_string())
-        server.quit()
-
-        print(f"[{datetime.now()}] ✅ Email sent to {EMAIL_ADDRESS}")
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
+        )
+        print(f"[{datetime.now()}] ✅ Telegram notification sent!")
         sys.stdout.flush()
     except Exception as e:
-        print(f"[{datetime.now()}] Email failed: {e}")
+        print(f"[{datetime.now()}] Telegram failed: {e}")
         sys.stdout.flush()
 
 def monitor_loop():
-    print("🛍️ Funko Monitor STARTED 24/7 with EMAIL alerts!")
+    print("🛍️ Funko Monitor STARTED 24/7 with TELEGRAM alerts!")
     sys.stdout.flush()
     seen = load_seen_products()
     while True:
@@ -82,7 +73,7 @@ def monitor_loop():
         if new:
             print(f"[{datetime.now()}] 🎉 {len(new)} NEW PRODUCTS!")
             sys.stdout.flush()
-            send_email_notification(new)
+            send_telegram_notification(new)
             seen.update(new)
             save_seen_products(seen)
         else:
@@ -92,7 +83,7 @@ def monitor_loop():
 
 @app.route("/")
 def home():
-    return "✅ Funko Monitor is running 24/7 with EMAIL! (ping OK)"
+    return "✅ Funko Monitor is running 24/7 with TELEGRAM! (ping OK)"
 
 if __name__ == "__main__":
     thread = threading.Thread(target=monitor_loop, daemon=True)
